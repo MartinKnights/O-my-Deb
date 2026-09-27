@@ -16,7 +16,7 @@ Debian-based machines. It brings together:
 ## Quick start
 
 ```sh
-git clone --recurse-submodules https://github.com/<you>/O-my-Deb.git
+git clone --recurse-submodules https://github.com/MartinKnights/O-my-Deb.git
 cd O-my-Deb
 ./install.sh
 ```
@@ -67,6 +67,6 @@ O-my-Deb/
 
 O-my-Deb is the distribution layer of the **Omivoid** project. The
 implementation (CLI, action registry, adapters, DMS plugins) lives in the
-[`omivoid-lmde`](https://github.com/<you>/omivoid-lmde) submodule; the design
+[`omivoid-lmde`](https://github.com/MartinKnights/omivoid-lmde) submodule; the design
 documentation and progress log live in the umbrella `OmiVoid` repository.
 A Void Linux port is planned (see the `OmiVoid-install` project).

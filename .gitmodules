@@ -1,0 +1,3 @@
+[submodule "omivoid-lmde"]
+	path = omivoid-lmde
+	url = https://github.com/MartinKnights/omivoid-lmde.git
