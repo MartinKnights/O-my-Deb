@@ -1,0 +1,2 @@
+// Hardware-specific outputs (scale, refresh rate) belong in the
+// hardware profile. See profiles/ in this repository.

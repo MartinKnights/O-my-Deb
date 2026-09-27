@@ -1,0 +1,31 @@
+{
+ "dankHooks": {
+  "enabled": true,
+  "wallpaperPath": "__HOME__/.local/bin/omivoid-hook"
+ },
+ "dankKDEConnect": {
+  "enabled": true
+ },
+ "dankLauncherKeys": {
+  "enabled": true,
+  "noTrigger": true,
+  "providers": [
+   "niri"
+  ]
+ },
+ "omivoidActions": {
+  "enabled": true,
+  "noTrigger": true,
+  "trigger": ""
+ },
+ "omivoidKeybinds": {
+  "enabled": true
+ },
+ "quickCapture": {
+  "enabled": true
+ },
+ "wallpaperCarousel": {
+  "enabled": true,
+  "wallpaperDirectory": "__HOME__/Wallpapers"
+ }
+}
