@@ -5,8 +5,10 @@
 - **Debian 13 (Trixie)** or **LMDE 7** (the reference platform). Other
   Debian-based distros may work but are untested.
 - A user account with **sudo** access.
+- **curl** and **gpg** — used to import the third-party signing keys.
 - ~2 GB free disk space (Niri + DMS + dependencies).
-- An internet connection.
+- An internet connection (the installer fetches APT keys from
+  `download.opensuse.org`).
 
 ## 1. Clone
 
@@ -30,24 +32,49 @@ git submodule update --init --recursive
 
 The installer is **idempotent** — re-running it is safe. It will:
 
-1. Install system packages via `apt` (DMS/Quickshell from backports,
-   matugen, pipewire, xwayland, terminals, browser, file manager).
-2. Install **Niri** and **xwayland-satellite** from the prebuilt `.deb`s in
+1. Add the required APT repositories (see *Third-party repositories* below),
+   ensure `trixie-backports` is enabled, and pin `quickshell` to Debian's build.
+2. Install system packages via `apt`: `quickshell` (trixie-backports), plus
+   pipewire, xwayland, portals, `fuzzel`, terminals, browser, and file manager
+   from Debian.
+3. Install **DMS**, **matugen**, and **ghostty** from the AvengeMedia Open
+   Build Service (they are not in Debian).
+4. Install **Niri** and **xwayland-satellite** from the prebuilt `.deb`s in
    `packages/`.
-3. Deploy the Niri configuration and DMS fragments to `~/.config/niri/`.
-4. Deploy the DMS shell settings and plugin settings to
+5. Deploy the Niri configuration and DMS fragments to `~/.config/niri/`.
+6. Deploy the DMS shell settings and plugin settings to
    `~/.config/DankMaterialShell/`.
-5. Deploy the Omivoid configuration to `~/.config/omivoid/` (existing user
+7. Deploy the Omivoid configuration to `~/.config/omivoid/` (existing user
    config is **kept**).
-6. Symlink the `omivoid` and `omivoid-hook` CLIs into `~/.local/bin/`.
-7. Generate the Niri bindings fragment from the action registry.
-8. Install the DMS plugins (Omivoid Actions, Omivoid Keybinds, and the
-   third-party set: dankHooks, dankKDEConnect, dankLauncherKeys,
-   quickCapture, wallpaperCarousel).
-9. Validate the registry and the Niri config.
+8. Symlink the `omivoid` and `omivoid-hook` CLIs into `~/.local/bin/`.
+9. Generate the Niri bindings fragment from the action registry.
+10. Install the DMS plugins (Omivoid Actions, Omivoid Keybinds, and the
+    third-party set: dankHooks, dankKDEConnect, dankLauncherKeys,
+    quickCapture, wallpaperCarousel).
+11. Validate the registry and the Niri config.
 
 Existing configuration files are backed up with a
 `.bak-omivoid-<timestamp>` suffix before being replaced.
+
+### Third-party repositories
+
+`dms`, `matugen`, and `ghostty` are **not packaged in Debian**. They come from
+AvengeMedia's Open Build Service, and `install.sh` wires these up automatically:
+
+| OBS project | Provides |
+|---|---|
+| `home:AvengeMedia:danklinux` | `matugen`, `ghostty`, `danksearch`, `dgop`, `niri` |
+| `home:AvengeMedia:dms` | `dms` (the shell itself) |
+
+This adds `/etc/apt/sources.list.d/{danklinux,dms}.list` plus the matching
+keyrings in `/etc/apt/keyrings/`.
+
+> **quickshell pinning.** The `danklinux` repo also ships a `quickshell`
+> build, but upstream marks it deprecated for Debian and directs users to
+> Debian's own. Its version (`0.3.1.db2`) sorts *higher* than Debian's
+> (`0.3.0-1~bpo13+1`), so APT would otherwise pick the deprecated one.
+> `install.sh` writes `/etc/apt/preferences.d/omivoid-quickshell` to force
+> Debian's build.
 
 ### Options
 
@@ -118,9 +145,20 @@ git -C O-my-Deb submodule update --init --recursive
 There is no automated uninstaller yet. To remove:
 
 ```sh
-sudo apt remove --purge niri xwayland-satellite quickshell dms matugen
+sudo apt remove --purge niri xwayland-satellite quickshell dms matugen ghostty
 rm -rf ~/.config/niri ~/.config/DankMaterialShell ~/.config/omivoid
 rm -f ~/.local/bin/omivoid ~/.local/bin/omivoid-hook
+```
+
+To also drop the APT repositories and keyrings the installer added:
+
+```sh
+sudo rm -f /etc/apt/sources.list.d/danklinux.list \
+            /etc/apt/sources.list.d/dms.list \
+            /etc/apt/keyrings/danklinux.gpg \
+            /etc/apt/keyrings/dms.gpg \
+            /etc/apt/preferences.d/omivoid-quickshell
+sudo apt update
 ```
 
 Restore any `.bak-omivoid-*` files you want to keep.

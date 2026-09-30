@@ -2,9 +2,10 @@
 #
 # O-my-Deb — one-command installer for Debian 13 / LMDE 7
 #
-# Installs: Niri (prebuilt .deb) + xwayland-satellite, Quickshell + DMS
-# (backports), matugen, pipewire, the omivoid CLI + actions + adapters,
-# DMS plugins, and deploys the O-my-Deb configurations.
+# Installs: Niri (prebuilt .deb) + xwayland-satellite, Quickshell (Debian
+# trixie-backports), DMS + matugen + ghostty (AvengeMedia Open Build Service),
+# pipewire, the omivoid CLI + actions + adapters, DMS plugins, and deploys
+# the O-my-Deb configurations.
 #
 # Usage:
 #   ./install.sh                              # full install
@@ -23,14 +24,37 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE=""
 INSTALL_PLUGINS=1
 
-# System packages (Debian 13 / LMDE 7)
+# Debian-native packages (Debian 13 / LMDE 7 main + trixie-backports).
+# Note: quickshell is installed separately with an explicit target release,
+# and nvim is not a Debian package name — the editor is packaged as `neovim`.
+#
+# libseat1 is listed explicitly because packages/niri_*.deb declares only
+# `alacritty, fuzzel` as dependencies. Without libseat1, niri installs but dies
+# at runtime with "error while loading shared libraries: libseat.so.1", which
+# also breaks `omivoid registry build` (it shells out to `niri validate`).
 APT_PACKAGES=(
-  quickshell dms matugen fuzzel
+  fuzzel
   pipewire pipewire-pulse wireplumber
   xwayland xdg-desktop-portal xdg-desktop-portal-gtk
   network-manager
-  alacritty ghostty firefox-esr nemo nvim
+  alacritty firefox-esr nemo neovim
+  libseat1
 )
+
+# Third-party packages that are NOT in Debian. These resolve only once the
+# AvengeMedia Open Build Service repositories have been added — see
+# add_obs_repositories() below. Installing them from stock APT fails with
+# "Unable to locate package".
+OBS_PACKAGES=(dms matugen ghostty)
+
+# Open Build Service projects providing those packages. `danklinux` carries the
+# DMS runtime companions (matugen, ghostty, danksearch, dgop, niri);
+# `dms` carries the DMS shell itself.
+OBS_REPOS=(
+  "danklinux|home:AvengeMedia:danklinux"
+  "dms|home:AvengeMedia:dms"
+)
+OBS_SUITE="Debian_13"
 
 # Third-party DMS plugins from the DMS plugin registry
 DMS_PLUGINS=(dankHooks dankKDEConnect dankLauncherKeys quickCapture wallpaperCarousel)
@@ -51,6 +75,50 @@ backup_existing() {  # backup_existing <path>
   say "Backed up existing $p -> $bak"
 }
 
+have_repo_line() {  # have_repo_line <suite>
+  grep -rqs -- "$1" /etc/apt/sources.list /etc/apt/sources.list.d/
+}
+
+ensure_backports() {
+  have_repo_line "trixie-backports" && return 0
+  say "Enabling trixie-backports (required for quickshell)..."
+  echo "deb http://deb.debian.org/debian trixie-backports main" \
+    | sudo tee /etc/apt/sources.list.d/trixie-backports.list >/dev/null
+}
+
+pin_quickshell() {
+  # The danklinux OBS repo also ships a quickshell build, but upstream marks it
+  # deprecated for Debian and directs users to Debian's own build (trixie-backports
+  # on Debian 13). The OBS version string (0.3.1.db2) sorts higher than Debian's
+  # (0.3.0-1~bpo13+1), so without this pin APT would prefer the deprecated build.
+  local pin=/etc/apt/preferences.d/omivoid-quickshell
+  if [ ! -f "$pin" ]; then
+    say "Pinning quickshell to the Debian build..."
+    printf 'Package: quickshell\nPin: release n=trixie-backports\nPin-Priority: 1001\n' \
+      | sudo tee "$pin" >/dev/null
+  fi
+}
+
+add_obs_repositories() {
+  local entry name project base keyring list
+  install -d -m 0755 /etc/apt/keyrings
+  for entry in "${OBS_REPOS[@]}"; do
+    name="${entry%%|*}"
+    project="${entry#*|}"
+    keyring="/etc/apt/keyrings/${name}.gpg"
+    list="/etc/apt/sources.list.d/${name}.list"
+    base="https://download.opensuse.org/repositories/${project}/${OBS_SUITE}"
+    if [ ! -s "$keyring" ]; then
+      say "Importing signing key for ${project}..."
+      curl -fsSL "$base/Release.key" | sudo gpg --dearmor --yes -o "$keyring"
+    fi
+    if [ ! -f "$list" ]; then
+      say "Adding APT source ${project}/${OBS_SUITE}..."
+      echo "deb [signed-by=${keyring}] ${base}/ /" | sudo tee "$list" >/dev/null
+    fi
+  done
+}
+
 # --- argument parsing ------------------------------------------------------
 
 while [ $# -gt 0 ]; do
@@ -58,7 +126,7 @@ while [ $# -gt 0 ]; do
     --profile) PROFILE="$2"; shift 2 ;;
     --no-plugins) INSTALL_PLUGINS=0; shift ;;
     -h|--help)
-      sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+      awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"
       exit 0 ;;
     *) die "Unknown argument: $1 (see --help)" ;;
   esac
@@ -69,6 +137,8 @@ done
 [ "$(id -u)" -eq 0 ] && die "Do not run as root; run as a normal user (sudo is used internally)."
 have sudo || die "sudo is required."
 have apt-get || die "This installer targets Debian-based systems (apt-get not found)."
+have curl || die "curl is required (used to import the OBS signing keys)."
+have gpg || die "gpg is required (used to dearmor the OBS signing keys)."
 
 # OS check: Debian 13 (trixie) / LMDE 7 (faye)
 . /etc/os-release 2>/dev/null || true
@@ -79,13 +149,24 @@ case "${VERSION_CODENAME:-}" in
     ;;
 esac
 
-# --- 1. system packages ----------------------------------------------------
+# --- 1. apt repositories ----------------------------------------------------
+
+ensure_backports
+pin_quickshell
+add_obs_repositories
+
+# --- 2. system packages -----------------------------------------------------
 
 say "Installing system packages (this needs sudo)..."
 sudo apt-get update -y
-sudo apt-get install -y "${APT_PACKAGES[@]}"
 
-# --- 2. Niri + xwayland-satellite ------------------------------------------
+# quickshell first, pinned to Debian's trixie-backports build rather than the
+# deprecated OBS one (see pin_quickshell).
+sudo apt-get install -y -t trixie-backports quickshell
+sudo apt-get install -y "${APT_PACKAGES[@]}"
+sudo apt-get install -y "${OBS_PACKAGES[@]}"
+
+# --- 3. Niri + xwayland-satellite -------------------------------------------
 
 if ! have niri; then
   say "Installing Niri + xwayland-satellite from prebuilt .debs..."
@@ -94,7 +175,7 @@ else
   say "Niri already installed ($(niri --version 2>/dev/null || echo '?'))."
 fi
 
-# --- 3. deploy configurations ----------------------------------------------
+# --- 4. deploy configurations -----------------------------------------------
 
 say "Deploying configurations..."
 mkdir -p ~/.config/niri ~/.config/DankMaterialShell ~/.config/omivoid ~/.local/bin
@@ -135,7 +216,7 @@ for f in ai.toml apps.toml; do
   fi
 done
 
-# --- 4. omivoid CLI ---------------------------------------------------------
+# --- 5. omivoid CLI ---------------------------------------------------------
 
 say "Setting up the omivoid CLI..."
 if [ ! -d "$REPO_DIR/omivoid-lmde" ]; then
@@ -147,7 +228,7 @@ ln -sf "$REPO_DIR/omivoid-lmde/cli/omivoid-hook" ~/.local/bin/omivoid-hook
 say "Generating the Niri bindings fragment..."
 "$REPO_DIR/omivoid-lmde/cli/omivoid" registry build
 
-# --- 5. DMS plugins ---------------------------------------------------------
+# --- 6. DMS plugins ---------------------------------------------------------
 
 if [ "$INSTALL_PLUGINS" -eq 1 ]; then
   say "Installing DMS plugins..."
@@ -163,7 +244,7 @@ if [ "$INSTALL_PLUGINS" -eq 1 ]; then
   done
 fi
 
-# --- 6. validation ----------------------------------------------------------
+# --- 7. validation ----------------------------------------------------------
 
 say "Validating..."
 "$REPO_DIR/omivoid-lmde/cli/omivoid" registry validate

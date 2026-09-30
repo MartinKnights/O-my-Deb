@@ -23,8 +23,17 @@ cd O-my-Deb
 
 Log out, select the **Niri** session at the display manager, and you're in.
 
-> Requires **Debian 13 (Trixie)** or **LMDE 7**. Needs `sudo`. See
+> Requires **Debian 13 (Trixie)** or **LMDE 7**. Needs `sudo`, plus `curl` and
+> `gpg` for the third-party signing keys. See
 > [docs/INSTALL.md](docs/INSTALL.md) for the full guide.
+
+## Third-party packages
+
+`dms`, `matugen`, and `ghostty` are not in Debian — they come from AvengeMedia's
+Open Build Service. The installer adds those repositories and their signing
+keys automatically, so there is nothing to do beforehand. `quickshell` comes
+from Debian's `trixie-backports`; the installer pins it there because the OBS
+copy is deprecated and would otherwise be preferred by version.
 
 ## What you get
 

@@ -2,18 +2,34 @@
 
 ## Installer
 
-### `apt-get install` fails on `quickshell` / `dms`
+### `apt-get install` fails on `dms` / `matugen` / `ghostty`
 
-DMS and Quickshell come from **Debian backports**. Enable backports:
+`dms`, `matugen`, and `ghostty` are **not packaged in Debian** — they come from
+AvengeMedia's Open Build Service (OBS). The installer automatically adds two
+repositories and their signing keys:
+
+| OBS project | Provides |
+|---|---|
+| `home:AvengeMedia:danklinux` | `matugen`, `ghostty`, `danksearch`, `dgop`, `niri` (optional) |
+| `home:AvengeMedia:dms` | `dms` (the shell itself) |
+
+If keys are rejected or the network is blocked, see the Requirements section in
+[INSTALL.md](INSTALL.md).
+
+### `apt-get install` picks the wrong `quickshell` (deprecated OBS build)
+
+The `danklinux` repo also ships a `quickshell` build. Its version number
+(`0.3.1.db2`) sorts higher than Debian's (`0.3.0-1~bpo13+1`) and would
+therefore be preferred by APT. The installer pins `quickshell` to
+`trixie-backports` via `/etc/apt/preferences.d/omivoid-quickshell`.
+
+If you have modified this pin, you can restore it:
 
 ```sh
-# Debian 13
-echo "deb http://deb.debian.org/debian trixie-backports main" \
-  | sudo tee /etc/apt/sources.list.d/backports.list
-sudo apt-get update
+printf 'Package: quickshell\nPin: release n=trixie-backports\nPin-Priority: 1001\n' \
+  | sudo tee /etc/apt/preferences.d/omivoid-quickshell >/dev/null
+sudo apt update && sudo apt install -t trixie-backports --reinstall quickshell
 ```
-
-(LMDE 7 already has backports configured.) Then re-run `./install.sh`.
 
 ### `niri validate` reports errors after install
 
