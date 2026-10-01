@@ -2,14 +2,22 @@
 #
 # Ominty — one-command installer for Debian 13 / LMDE 7
 #
-# Installs: Niri (prebuilt .deb) + xwayland-satellite, Quickshell (Debian
-# trixie-backports), DMS + matugen + ghostty (AvengeMedia Open Build Service),
-# pipewire, the ominty CLI + actions + adapters, DMS plugins, and deploys
-# the Ominty configurations.
+# Installs the layers declared in the ominty-core manifest (see
+# `ominty layers`): the Niri + DankMaterialShell desktop, terminal and shell,
+# editor, CLI tooling, containers and browser. Also installs Niri from a
+# bundled .deb, Quickshell from Debian trixie-backports, DMS/matugen/ghostty
+# from the AvengeMedia Open Build Service, and deploys the Ominty
+# configuration.
+#
+# The manifest is the single source of truth, so this script and
+# `ominty inspect` cannot disagree about what a layer contains.
 #
 # Usage:
-#   ./install.sh                              # full install
+#   ./install.sh                              # all layers
+#   ./install.sh --layers desktop             # desktop only
+#   ./install.sh --layers "desktop terminal"  # pick layers
 #   ./install.sh --profile surface-book-1     # + hardware profile
+#   ./install.sh --dry-run                     # print the plan, change nothing
 #   ./install.sh --no-plugins                 # skip DMS plugin install
 #   ./install.sh --help
 #
@@ -23,29 +31,48 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE=""
 INSTALL_PLUGINS=1
+DRY_RUN=0
+OMINTY_CLI="$REPO_DIR/ominty-core/cli/ominty"
 
-# Debian-native packages (Debian 13 / LMDE 7 main + trixie-backports).
-# Note: quickshell is installed separately with an explicit target release,
-# and nvim is not a Debian package name — the editor is packaged as `neovim`.
+# Which layers to install. The manifest in ominty-core is the single source of
+# truth for what each layer contains, so the installer and `ominty inspect`
+# cannot drift apart. Override with --layers.
+LAYERS="desktop terminal editor cli containers browser"
+
+# Package lists are derived from that manifest rather than duplicated here.
+# `layer_packages <source> [exclude...]` prints required package names.
+layer_packages() {
+  local source="$1"; shift
+  local args=() layer
+  for layer in $LAYERS; do args+=(--layer "$layer"); done
+  "$OMINTY_CLI" layers --format shell "${args[@]}" \
+    | awk -F'\t' -v src="$source" '$1 == src { print $2 }' \
+    | grep -vxF "$@" \
+    || true
+}
+
+# Resolve the layer manifest. This must run *after* argument parsing, since
+# --layers changes $LAYERS.
+resolve_layers() {
+  for layer in $LAYERS; do
+    if ! "$OMINTY_CLI" layers --format shell --layer "$layer" >/dev/null 2>&1; then
+      die "Unknown layer: $layer (available: $("$OMINTY_CLI" layers --format ids | tr '\n' ' '))"
+    fi
+  done
+  APT_PACKAGES=$(layer_packages apt quickshell)
+  OBS_PACKAGES=$(layer_packages obs)
+}
+
+# quickshell needs its own apt-get call with an explicit target release, so it
+# is excluded from the general Debian list (see resolve_layers).
+# ghostty is in the terminal layer and therefore absent from the desktop layer.
 #
-# libseat1 is listed explicitly because packages/niri_*.deb declares only
-# `alacritty, fuzzel` as dependencies. Without libseat1, niri installs but dies
-# at runtime with "error while loading shared libraries: libseat.so.1", which
-# also breaks `ominty registry build` (it shells out to `niri validate`).
-APT_PACKAGES=(
-  fuzzel
-  pipewire pipewire-pulse wireplumber
-  xwayland xdg-desktop-portal xdg-desktop-portal-gtk
-  network-manager
-  alacritty firefox-esr nemo neovim
-  libseat1
-)
-
-# Third-party packages that are NOT in Debian. These resolve only once the
-# AvengeMedia Open Build Service repositories have been added — see
-# add_obs_repositories() below. Installing them from stock APT fails with
-# "Unable to locate package".
-OBS_PACKAGES=(dms matugen ghostty)
+# libseat1 is listed in the desktop layer because packages/niri_*.deb declares
+# only `alacritty, fuzzel` as dependencies. Without libseat1, niri installs but
+# dies at runtime with "error while loading shared libraries: libseat.so.1",
+# which also breaks `ominty registry build` (it shells out to `niri validate`).
+APT_PACKAGES=""
+OBS_PACKAGES=""
 
 # Open Build Service projects providing those packages. `danklinux` carries the
 # DMS runtime companions (matugen, ghostty, danksearch, dgop, niri);
@@ -64,14 +91,25 @@ DMS_PLUGINS=(dankHooks dankKDEConnect dankLauncherKeys quickCapture wallpaperCar
 say()  { printf '\033[1;34m[Ominty]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
+plan() { printf '\033[1;35m[DRY ]\033[0m %s\n' "$*"; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Run a command, or describe it instead when --dry-run is active. Every
+# mutating step goes through this so a dry run touches nothing.
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    plan "$*"
+  else
+    "$@"
+  fi
+}
 
 backup_existing() {  # backup_existing <path>
   local p="$1"
   [ -e "$p" ] || return 0
   local bak="${p}.bak-ominty-$(date +%Y%m%d-%H%M%S)"
-  cp -a "$p" "$bak"
+  run cp -a "$p" "$bak"
   say "Backed up existing $p -> $bak"
 }
 
@@ -83,7 +121,7 @@ ensure_backports() {
   have_repo_line "trixie-backports" && return 0
   say "Enabling trixie-backports (required for quickshell)..."
   echo "deb http://deb.debian.org/debian trixie-backports main" \
-    | sudo tee /etc/apt/sources.list.d/trixie-backports.list >/dev/null
+    | run sudo tee /etc/apt/sources.list.d/trixie-backports.list >/dev/null
 }
 
 pin_quickshell() {
@@ -95,13 +133,13 @@ pin_quickshell() {
   if [ ! -f "$pin" ]; then
     say "Pinning quickshell to the Debian build..."
     printf 'Package: quickshell\nPin: release n=trixie-backports\nPin-Priority: 1001\n' \
-      | sudo tee "$pin" >/dev/null
+      | run sudo tee "$pin" >/dev/null
   fi
 }
 
 add_obs_repositories() {
   local entry name project base keyring list
-  install -d -m 0755 /etc/apt/keyrings
+  run install -d -m 0755 /etc/apt/keyrings
   for entry in "${OBS_REPOS[@]}"; do
     name="${entry%%|*}"
     project="${entry#*|}"
@@ -110,11 +148,13 @@ add_obs_repositories() {
     base="https://download.opensuse.org/repositories/${project}/${OBS_SUITE}"
     if [ ! -s "$keyring" ]; then
       say "Importing signing key for ${project}..."
-      curl -fsSL "$base/Release.key" | sudo gpg --dearmor --yes -o "$keyring"
+      run curl -fsSL "$base/Release.key" --output "$base/Release.key.tmp"
+    run sudo gpg --dearmor --yes -o "$keyring" "$base/Release.key.tmp"
+    run rm -f "$base/Release.key.tmp"
     fi
     if [ ! -f "$list" ]; then
       say "Adding APT source ${project}/${OBS_SUITE}..."
-      echo "deb [signed-by=${keyring}] ${base}/ /" | sudo tee "$list" >/dev/null
+      echo "deb [signed-by=${keyring}] ${base}/ /" | run sudo tee "$list" >/dev/null
     fi
   done
 }
@@ -124,6 +164,8 @@ add_obs_repositories() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
+    --layers) LAYERS="$2"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
     --no-plugins) INSTALL_PLUGINS=0; shift ;;
     -h|--help)
       awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"
@@ -139,11 +181,22 @@ have sudo || die "sudo is required."
 have apt-get || die "This installer targets Debian-based systems (apt-get not found)."
 have curl || die "curl is required (used to import the OBS signing keys)."
 have gpg || die "gpg is required (used to dearmor the OBS signing keys)."
+[ -x "$OMINTY_CLI" ] || die "ominty-core submodule missing or incomplete. Run: git submodule update --init --recursive"
+have python3 || die "python3 is required (the ominty CLI reads the layer manifest)."
+
+resolve_layers
+
+# The layer lists are only useful if they actually resolved.
+[ -n "$APT_PACKAGES" ] || die "No Debian packages resolved from the layer manifest (layers: $LAYERS)."
+case " $LAYERS " in
+  *desktop*) : ;;
+  *) warn "The 'desktop' layer is not selected; this installs tooling without the desktop itself." ;;
+esac
 
 # OS check: Debian 13 (trixie) / LMDE 7 (faye)
 . /etc/os-release 2>/dev/null || true
 case "${VERSION_CODENAME:-}" in
-  trixie|faye) : ;;
+  trixie|faye|gigi) : ;;
   *)
     warn "Untested distro (${PRETTY_NAME:-unknown}). Debian 13 / LMDE 7 is the supported target."
     ;;
@@ -157,20 +210,23 @@ add_obs_repositories
 
 # --- 2. system packages -----------------------------------------------------
 
+say "Installing layers: $LAYERS"
 say "Installing system packages (this needs sudo)..."
-sudo apt-get update -y
+run sudo apt-get update -y
 
 # quickshell first, pinned to Debian's trixie-backports build rather than the
 # deprecated OBS one (see pin_quickshell).
-sudo apt-get install -y -t trixie-backports quickshell
-sudo apt-get install -y "${APT_PACKAGES[@]}"
-sudo apt-get install -y "${OBS_PACKAGES[@]}"
+run sudo apt-get install -y -t trixie-backports quickshell
+# shellcheck disable=SC2086
+run sudo apt-get install -y $APT_PACKAGES
+# shellcheck disable=SC2086
+[ -z "$OBS_PACKAGES" ] || run sudo apt-get install -y $OBS_PACKAGES
 
 # --- 3. Niri + xwayland-satellite -------------------------------------------
 
 if ! have niri; then
   say "Installing Niri + xwayland-satellite from prebuilt .debs..."
-  sudo apt-get install -y "$REPO_DIR"/packages/niri_*.deb "$REPO_DIR"/packages/xwayland-satellite_*.deb
+  run sudo apt-get install -y "$REPO_DIR"/packages/niri_*.deb "$REPO_DIR"/packages/xwayland-satellite_*.deb
 else
   say "Niri already installed ($(niri --version 2>/dev/null || echo '?'))."
 fi
@@ -178,14 +234,14 @@ fi
 # --- 4. deploy configurations -----------------------------------------------
 
 say "Deploying configurations..."
-mkdir -p ~/.config/niri ~/.config/DankMaterialShell ~/.config/ominty ~/.local/bin
+run mkdir -p ~/.config/niri ~/.config/DankMaterialShell ~/.config/ominty ~/.local/bin
 
 # niri
 backup_existing ~/.config/niri/config.kdl
-cp "$REPO_DIR/configs/niri/config.kdl" ~/.config/niri/config.kdl
-mkdir -p ~/.config/niri/dms
+run cp "$REPO_DIR/configs/niri/config.kdl" ~/.config/niri/config.kdl
+run mkdir -p ~/.config/niri/dms
 for f in "$REPO_DIR"/configs/niri/dms/*.kdl; do
-  cp "$f" ~/.config/niri/dms/
+  run cp "$f" ~/.config/niri/dms/
 done
 
 # hardware profile
@@ -193,7 +249,7 @@ if [ -n "$PROFILE" ]; then
   if [ -d "$REPO_DIR/profiles/$PROFILE" ]; then
     say "Applying hardware profile: $PROFILE"
     if [ -f "$REPO_DIR/profiles/$PROFILE/niri-outputs.kdl" ]; then
-      cp "$REPO_DIR/profiles/$PROFILE/niri-outputs.kdl" ~/.config/niri/dms/outputs.kdl
+      run cp "$REPO_DIR/profiles/$PROFILE/niri-outputs.kdl" ~/.config/niri/dms/outputs.kdl
     fi
   else
     die "Unknown profile: $PROFILE (available: $(ls "$REPO_DIR/profiles"))"
@@ -202,15 +258,19 @@ fi
 
 # DMS
 backup_existing ~/.config/DankMaterialShell/settings.json
-cp "$REPO_DIR/configs/dms/settings.json" ~/.config/DankMaterialShell/settings.json
+run cp "$REPO_DIR/configs/dms/settings.json" ~/.config/DankMaterialShell/settings.json
 backup_existing ~/.config/DankMaterialShell/plugin_settings.json
-sed "s|__HOME__|$HOME|g" "$REPO_DIR/configs/dms/plugin_settings.json.template" \
-  > ~/.config/DankMaterialShell/plugin_settings.json
+if [ "$DRY_RUN" -eq 1 ]; then
+  plan "render $REPO_DIR/configs/dms/plugin_settings.json.template -> ~/.config/DankMaterialShell/plugin_settings.json (with __HOME__ replaced)"
+else
+  sed "s|__HOME__|$HOME|g" "$REPO_DIR/configs/dms/plugin_settings.json.template" \
+    > ~/.config/DankMaterialShell/plugin_settings.json
+fi
 
 # ominty (user configuration wins)
 for f in ai.toml apps.toml; do
   if [ ! -f ~/.config/ominty/$f ]; then
-    cp "$REPO_DIR/configs/ominty/$f" ~/.config/ominty/$f
+    run cp "$REPO_DIR/configs/ominty/$f" ~/.config/ominty/$f
   else
     say "~/.config/ominty/$f exists — keeping user configuration."
   fi
@@ -222,24 +282,30 @@ say "Setting up the ominty CLI..."
 if [ ! -d "$REPO_DIR/ominty-core" ]; then
   die "ominty-core submodule missing. Clone with: git clone --recurse-submodules <url>"
 fi
-ln -sf "$REPO_DIR/ominty-core/cli/ominty" ~/.local/bin/ominty
-ln -sf "$REPO_DIR/ominty-core/cli/ominty-hook" ~/.local/bin/ominty-hook
+run ln -sf "$REPO_DIR/ominty-core/cli/ominty" ~/.local/bin/ominty
+run ln -sf "$REPO_DIR/ominty-core/cli/ominty-hook" ~/.local/bin/ominty-hook
 
 say "Generating the Niri bindings fragment..."
-"$REPO_DIR/ominty-core/cli/ominty" registry build
+# registry build writes ~/.config/ominty/generated/... so it must be skipped in
+# a dry run, not merely printed.
+if [ "$DRY_RUN" -eq 1 ]; then
+  plan "$REPO_DIR/ominty-core/cli/ominty registry build  # writes ~/.config/ominty/generated/niri/bindings.kdl"
+else
+  "$REPO_DIR/ominty-core/cli/ominty" registry build
+fi
 
 # --- 6. DMS plugins ---------------------------------------------------------
 
 if [ "$INSTALL_PLUGINS" -eq 1 ]; then
   say "Installing DMS plugins..."
-  mkdir -p ~/.config/DankMaterialShell/plugins
-  ln -sfn "$REPO_DIR/ominty-core/shell/dms/ominty-actions" \
+  run mkdir -p ~/.config/DankMaterialShell/plugins
+  run ln -sfn "$REPO_DIR/ominty-core/shell/dms/ominty-actions" \
     ~/.config/DankMaterialShell/plugins/omintyActions
-  ln -sfn "$REPO_DIR/ominty-core/shell/dms/ominty-keybinds" \
+  run ln -sfn "$REPO_DIR/ominty-core/shell/dms/ominty-keybinds" \
     ~/.config/DankMaterialShell/plugins/omintyKeybinds
   for p in "${DMS_PLUGINS[@]}"; do
     if [ ! -e ~/.config/DankMaterialShell/plugins/$p ]; then
-      dms plugins install "$p" || warn "Could not install plugin: $p"
+      run dms plugins install "$p" || warn "Could not install plugin: $p"
     fi
   done
 fi
