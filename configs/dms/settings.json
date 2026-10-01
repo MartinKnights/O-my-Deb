@@ -17,7 +17,6 @@
   "dankLauncherV2BorderEnabled": true,
   "dankLauncherV2BorderColor": "outline",
   "launcherUseOverlayLayer": true,
-  "launcherStyle": "spotlight",
   "spotlightBarShowModeChips": true,
   "useAutoLocation": true,
   "networkPreference": "wifi",
@@ -190,5 +189,7 @@
       "trigger": "qrg"
     }
   },
-  "configVersion": 18
+  "configVersion": 18,
+  "launcherStyle": "spotlight",
+  "rememberLastQuery": false
 }
