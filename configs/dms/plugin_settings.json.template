@@ -1,7 +1,7 @@
 {
  "dankHooks": {
   "enabled": true,
-  "wallpaperPath": "__HOME__/.local/bin/omivoid-hook"
+  "wallpaperPath": "__HOME__/.local/bin/ominty-hook"
  },
  "dankKDEConnect": {
   "enabled": true
@@ -13,12 +13,12 @@
    "niri"
   ]
  },
- "omivoidActions": {
+ "omintyActions": {
   "enabled": true,
   "noTrigger": true,
   "trigger": ""
  },
- "omivoidKeybinds": {
+ "omintyKeybinds": {
   "enabled": true
  },
  "quickCapture": {

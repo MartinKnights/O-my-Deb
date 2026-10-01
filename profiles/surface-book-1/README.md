@@ -1,7 +1,7 @@
 # Surface Book 1 profile (optional)
 
 Hardware-specific extras for the Microsoft Surface Book 1 (2016), the
-reference device O-my-Deb was developed on. **Not required** for a general
+reference device Ominty was developed on. **Not required** for a general
 Debian desktop — apply only if you are on this hardware.
 
 ## What's here

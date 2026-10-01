@@ -1,4 +1,4 @@
-// O-my-Deb Niri configuration
+// Ominty Niri configuration
 // This config is in the KDL format: https://kdl.dev
 // "/-" comments out the following node.
 // Check the wiki for a full description of the configuration:
@@ -252,6 +252,6 @@ include optional=true "dms/outputs.kdl"
 include optional=true "dms/cursor.kdl"
 include optional=true "dms/input.kdl"
 
-// Omivoid generated bindings (registry → Niri fragment)
-include optional=true "~/.config/omivoid/generated/niri/bindings.kdl"
+// Ominty generated bindings (registry → Niri fragment)
+include optional=true "~/.config/ominty/generated/niri/bindings.kdl"
 include "dms/windowrules.kdl"

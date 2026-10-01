@@ -13,11 +13,11 @@
 ## 1. Clone
 
 ```sh
-git clone --recurse-submodules https://github.com/<you>/O-my-Deb.git
-cd O-my-Deb
+git clone --recurse-submodules https://github.com/<you>/Ominty.git
+cd Ominty
 ```
 
-The `--recurse-submodules` flag pulls the `omivoid-lmde` implementation
+The `--recurse-submodules` flag pulls the `ominty-core` implementation
 submodule. If you forgot it:
 
 ```sh
@@ -44,17 +44,17 @@ The installer is **idempotent** — re-running it is safe. It will:
 5. Deploy the Niri configuration and DMS fragments to `~/.config/niri/`.
 6. Deploy the DMS shell settings and plugin settings to
    `~/.config/DankMaterialShell/`.
-7. Deploy the Omivoid configuration to `~/.config/omivoid/` (existing user
+7. Deploy the Ominty configuration to `~/.config/ominty/` (existing user
    config is **kept**).
-8. Symlink the `omivoid` and `omivoid-hook` CLIs into `~/.local/bin/`.
+8. Symlink the `ominty` and `ominty-hook` CLIs into `~/.local/bin/`.
 9. Generate the Niri bindings fragment from the action registry.
-10. Install the DMS plugins (Omivoid Actions, Omivoid Keybinds, and the
+10. Install the DMS plugins (Ominty Actions, Ominty Keybinds, and the
     third-party set: dankHooks, dankKDEConnect, dankLauncherKeys,
     quickCapture, wallpaperCarousel).
 11. Validate the registry and the Niri config.
 
 Existing configuration files are backed up with a
-`.bak-omivoid-<timestamp>` suffix before being replaced.
+`.bak-ominty-<timestamp>` suffix before being replaced.
 
 ### Third-party repositories
 
@@ -73,7 +73,7 @@ keyrings in `/etc/apt/keyrings/`.
 > build, but upstream marks it deprecated for Debian and directs users to
 > Debian's own. Its version (`0.3.1.db2`) sorts *higher* than Debian's
 > (`0.3.0-1~bpo13+1`), so APT would otherwise pick the deprecated one.
-> `install.sh` writes `/etc/apt/preferences.d/omivoid-quickshell` to force
+> `install.sh` writes `/etc/apt/preferences.d/ominty-quickshell` to force
 > Debian's build.
 
 ### Options
@@ -93,7 +93,7 @@ keyrings in `/etc/apt/keyrings/`.
 ## 4. Post-install checks
 
 ```sh
-omivoid registry validate        # 44 action(s), 0 error(s), 0 warning(s)
+ominty registry validate        # 44 action(s), 0 error(s), 0 warning(s)
 niri validate -c ~/.config/niri/config.kdl   # config is valid
 systemctl --user is-active dms   # active
 ```
@@ -108,14 +108,14 @@ Then exercise the surfaces:
 
 ## 5. AI setup (optional)
 
-The default AI provider is **Pi** (`configs/omivoid/ai.toml`). To use a local
+The default AI provider is **Pi** (`configs/ominty/ai.toml`). To use a local
 model instead:
 
 1. Install [Ollama](https://ollama.com) and pull a model:
    ```sh
    ollama pull qwen2.5:3b
    ```
-2. Create `~/.config/omivoid/ai.toml`:
+2. Create `~/.config/ominty/ai.toml`:
    ```toml
    [ai]
    default_provider = "ollama"
@@ -135,8 +135,8 @@ when the wallpaper changes.
 ## 7. Updating
 
 ```sh
-git -C O-my-Deb pull
-git -C O-my-Deb submodule update --init --recursive
+git -C Ominty pull
+git -C Ominty submodule update --init --recursive
 ./install.sh        # re-run; configs are backed up and replaced
 ```
 
@@ -146,8 +146,8 @@ There is no automated uninstaller yet. To remove:
 
 ```sh
 sudo apt remove --purge niri xwayland-satellite quickshell dms matugen ghostty
-rm -rf ~/.config/niri ~/.config/DankMaterialShell ~/.config/omivoid
-rm -f ~/.local/bin/omivoid ~/.local/bin/omivoid-hook
+rm -rf ~/.config/niri ~/.config/DankMaterialShell ~/.config/ominty
+rm -f ~/.local/bin/ominty ~/.local/bin/ominty-hook
 ```
 
 To also drop the APT repositories and keyrings the installer added:
@@ -157,8 +157,8 @@ sudo rm -f /etc/apt/sources.list.d/danklinux.list \
             /etc/apt/sources.list.d/dms.list \
             /etc/apt/keyrings/danklinux.gpg \
             /etc/apt/keyrings/dms.gpg \
-            /etc/apt/preferences.d/omivoid-quickshell
+            /etc/apt/preferences.d/ominty-quickshell
 sudo apt update
 ```
 
-Restore any `.bak-omivoid-*` files you want to keep.
+Restore any `.bak-ominty-*` files you want to keep.

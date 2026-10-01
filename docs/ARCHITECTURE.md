@@ -1,9 +1,9 @@
 # Architecture
 
-O-my-Deb is the **distribution layer** of the Omivoid project: it packages a
+Ominty is the **distribution layer** of the Ominty project: it packages a
 working, validated desktop for Debian-based systems. The design intent lives
-in the umbrella `OmiVoid` repository; the implementation lives in the
-`omivoid-lmde` submodule.
+in the umbrella `Ominty` repository; the implementation lives in the
+`ominty-core` submodule.
 
 ## The stack
 
@@ -16,7 +16,7 @@ in the umbrella `OmiVoid` repository; the implementation lives in the
            │ plugins / IPC        │ generated bindings
            ▼                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  omivoid CLI (omivoid-lmde submodule)                   │
+│  ominty CLI (ominty-core submodule)                   │
 │  action registry → adapters → execution                 │
 │  registry build → Niri fragment                         │
 └──────────┬──────────────────────────────────────────────┘
@@ -31,12 +31,12 @@ in the umbrella `OmiVoid` repository; the implementation lives in the
 ## Core principle: the action registry is the source of truth
 
 Every capability of the desktop is an **action** defined in the registry
-(`omivoid-lmde/actions/*.toml`). From the registry, the CLI:
+(`ominty-core/actions/*.toml`). From the registry, the CLI:
 
-1. **Validates** the registry (`omivoid registry validate`).
+1. **Validates** the registry (`ominty registry validate`).
 2. **Generates** the Niri keybinding fragment
-   (`omivoid registry build` → `~/.config/omivoid/generated/niri/bindings.kdl`).
-3. **Runs** actions through adapters (`omivoid action run <id>`).
+   (`ominty registry build` → `~/.config/ominty/generated/niri/bindings.kdl`).
+3. **Runs** actions through adapters (`ominty action run <id>`).
 4. **Serves** the DMS plugins (launcher entries, cheat-sheet rows).
 
 No interaction surface hard-codes commands where a canonical action exists
@@ -63,17 +63,17 @@ Debian — they are the porting surface for the Void phase.
 ## Configuration flow
 
 ```
-O-my-Deb/configs/  ──install.sh──▶  ~/.config/
+Ominty/configs/  ──install.sh──▶  ~/.config/
 ├── niri/config.kdl                 ├── niri/config.kdl
 ├── niri/dms/*.kdl                  ├── niri/dms/*.kdl
 ├── dms/settings.json               ├── DankMaterialShell/settings.json
 ├── dms/plugin_settings.json.tpl    ├── DankMaterialShell/plugin_settings.json
-└── omivoid/*.toml                  └── omivoid/*.toml   (user config wins)
+└── ominty/*.toml                  └── ominty/*.toml   (user config wins)
 ```
 
 - Templates use `__HOME__` placeholders substituted at install time.
 - Existing user configuration is **backed up**, never silently destroyed.
-- Omivoid user overrides (`~/.config/omivoid/`) win over shipped defaults.
+- Ominty user overrides (`~/.config/ominty/`) win over shipped defaults.
 
 ## Hardware profiles
 
@@ -93,16 +93,16 @@ The AI surface (`Super+A`) is a first-class interaction path:
 ## Portability (Void)
 
 The platform abstraction (`adapters/{debian,void}/`) isolates distribution
-differences. The Void port is tracked in the separate `OmiVoid-install`
+differences. The Void port is tracked in the separate `Ominty-install`
 project and requires: xbps packaging, runit services, and exercising the
 Void adapters. No architectural change is expected.
 
 ## Design documents
 
-The authoritative design lives in the umbrella `OmiVoid` repository:
+The authoritative design lives in the umbrella `Ominty` repository:
 
 - `docs/00-project-overview.md` … `docs/14-gks-keyboard-grammar.md`
 - `docs/decisions/ADR-*.md` (architecture decision records)
 - `PROGRESS.md` (the living progress log)
 
-The implementation's own records are in `omivoid-lmde/docs/`.
+The implementation's own records are in `ominty-core/docs/`.

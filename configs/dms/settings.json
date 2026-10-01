@@ -11,7 +11,7 @@
   "workspaceDragReorder": false,
   "appIdSubstitutions": [],
   "spotlightSectionViewModes": {
-    "plugin_omivoidActions": "list"
+    "plugin_omintyActions": "list"
   },
   "niriOverviewLauncherStyle": "spotlight",
   "dankLauncherV2BorderEnabled": true,
@@ -54,17 +54,17 @@
     {
       "icon": "volume_up",
       "label": "Restart Audio",
-      "command": "omivoid action run system.audio.restart"
+      "command": "ominty action run system.audio.restart"
     },
     {
       "icon": "wifi",
       "label": "Restart Network",
-      "command": "omivoid action run system.network.restart"
+      "command": "ominty action run system.network.restart"
     },
     {
       "icon": "refresh",
       "label": "Reload Niri",
-      "command": "omivoid action run system.niri.reload"
+      "command": "ominty action run system.niri.reload"
     }
   ],
   "updaterIncludeFlatpak": false,

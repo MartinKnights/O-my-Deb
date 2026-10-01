@@ -21,28 +21,28 @@ If keys are rejected or the network is blocked, see the Requirements section in
 The `danklinux` repo also ships a `quickshell` build. Its version number
 (`0.3.1.db2`) sorts higher than Debian's (`0.3.0-1~bpo13+1`) and would
 therefore be preferred by APT. The installer pins `quickshell` to
-`trixie-backports` via `/etc/apt/preferences.d/omivoid-quickshell`.
+`trixie-backports` via `/etc/apt/preferences.d/ominty-quickshell`.
 
 If you have modified this pin, you can restore it:
 
 ```sh
 printf 'Package: quickshell\nPin: release n=trixie-backports\nPin-Priority: 1001\n' \
-  | sudo tee /etc/apt/preferences.d/omivoid-quickshell >/dev/null
+  | sudo tee /etc/apt/preferences.d/ominty-quickshell >/dev/null
 sudo apt update && sudo apt install -t trixie-backports --reinstall quickshell
 ```
 
 ### `niri validate` reports errors after install
 
-The config includes `dms/*.kdl` fragments and the Omivoid-generated
+The config includes `dms/*.kdl` fragments and the Ominty-generated
 `bindings.kdl`. If a fragment is missing, the include is `optional=true`
 and Niri still starts. Re-run `./install.sh` to regenerate, or check:
 
 ```sh
 ls ~/.config/niri/dms/
-ls ~/.config/omivoid/generated/niri/bindings.kdl
+ls ~/.config/ominty/generated/niri/bindings.kdl
 ```
 
-### `omivoid` command not found
+### `ominty` command not found
 
 `~/.local/bin` must be on your `PATH`. Add to `~/.bashrc` / `~/.zshrc`:
 
@@ -63,23 +63,23 @@ If DMS isn't running, start it: `dms` (or check the Niri session autostart).
 
 ### `Super+K` does nothing
 
-1. Check the Omivoid fragment is included:
+1. Check the Ominty fragment is included:
    ```sh
    tail -3 ~/.config/niri/config.kdl
    ```
    It must end with the `include ... bindings.kdl` line.
-2. Regenerate: `omivoid registry build`
+2. Regenerate: `ominty registry build`
 3. Reload Niri: `Super+X` → **Reload Niri**, or `niri msg action reload-config`.
 
-### `Super+Space` shows apps but no Omivoid actions
+### `Super+Space` shows apps but no Ominty actions
 
-The `omivoidActions` plugin must be enabled:
+The `omintyActions` plugin must be enabled:
 
 ```sh
-ls ~/.config/DankMaterialShell/plugins/omivoidActions
+ls ~/.config/DankMaterialShell/plugins/omintyActions
 ```
 
-and `plugin_settings.json` must have `"omivoidActions": { "enabled": true }`.
+and `plugin_settings.json` must have `"omintyActions": { "enabled": true }`.
 Re-run `./install.sh` to restore.
 
 ### Wallpaper carousel is empty
@@ -108,10 +108,10 @@ disconnects networking — don't run it over a remote session.
 
 ### `Super+A` → Ask AI errors
 
-- Check the provider: `omivoid ai provider status`
+- Check the provider: `ominty ai provider status`
 - If using Ollama: is it running? `ollama list`
 - Is the model pulled? `ollama pull qwen2.5:3b`
-- Check `~/.config/omivoid/ai.toml` for the provider/model configuration.
+- Check `~/.config/ominty/ai.toml` for the provider/model configuration.
 
 ### AI actions are refused
 

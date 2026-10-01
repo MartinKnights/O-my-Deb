@@ -1,23 +1,23 @@
-# O-my-Deb
+# Ominty
 
 **A keyboard-first, action-driven Wayland desktop for Debian-based systems.**
 
-O-my-Deb packages the Omivoid Phase 1 reference implementation — built and
+Ominty packages the Ominty Phase 1 reference implementation — built and
 validated on LMDE 7 (Debian 13) — into a one-command installer for other
 Debian-based machines. It brings together:
 
 - **Niri** — the scrollable-tiling Wayland compositor (prebuilt `.deb`)
 - **DankMaterialShell (DMS)** — the Quickshell-based desktop shell
-- **Omivoid** — the action registry, CLI, and adapters that make the desktop
+- **Ominty** — the action registry, CLI, and adapters that make the desktop
   discoverable and AI-native
 - **matugen** — wallpaper-driven dynamic theming
-- A complete, working configuration set (Niri + DMS + Omivoid)
+- A complete, working configuration set (Niri + DMS + Ominty)
 
 ## Quick start
 
 ```sh
-git clone --recurse-submodules https://github.com/MartinKnights/O-my-Deb.git
-cd O-my-Deb
+git clone --recurse-submodules https://github.com/MartinKnights/Ominty.git
+cd Ominty
 ./install.sh
 ```
 
@@ -39,7 +39,7 @@ copy is deprecated and would otherwise be preferred by version.
 
 | Surface | Key | What it does |
 |---|---|---|
-| Interaction explorer | `Super+K` | Browse and run every Omivoid action |
+| Interaction explorer | `Super+K` | Browse and run every Ominty action |
 | Universal palette | `Super+Space` | Apps **and** actions together |
 | Cheat sheet | `Super+Shift+S` | Tabbed keybinding reference (GKS) |
 | AI menu | `Super+A` | Ask AI / open Pi |
@@ -52,17 +52,17 @@ generates the Niri keybindings, the DMS launcher, and the cheat sheet.
 ## Repository layout
 
 ```
-O-my-Deb/
+Ominty/
 ├── install.sh                  # one-command installer (idempotent)
 ├── configs/                    # deployable configurations
 │   ├── niri/                   #   compositor config + DMS fragments
 │   ├── dms/                    #   shell settings + plugin settings
-│   └── omivoid/                #   action registry config (roles, AI)
+│   └── ominty/                #   action registry config (roles, AI)
 ├── packages/                   # prebuilt .debs (niri, xwayland-satellite)
 ├── profiles/                   # optional hardware profiles
 │   └── surface-book-1/         #   reference hardware extras
 ├── docs/                       # INSTALL, HARDWARE, TROUBLESHOOTING, ARCHITECTURE
-└── omivoid-lmde/               # the implementation (git submodule)
+└── ominty-core/               # the implementation (git submodule)
 ```
 
 ## Documentation
@@ -74,8 +74,8 @@ O-my-Deb/
 
 ## Project lineage
 
-O-my-Deb is the distribution layer of the **Omivoid** project. The
+Ominty is the distribution layer of the **Ominty** project. The
 implementation (CLI, action registry, adapters, DMS plugins) lives in the
-[`omivoid-lmde`](https://github.com/MartinKnights/omivoid-lmde) submodule; the design
-documentation and progress log live in the umbrella `OmiVoid` repository.
-A Void Linux port is planned (see the `OmiVoid-install` project).
+[`ominty-core`](https://github.com/MartinKnights/ominty-core) submodule; the design
+documentation and progress log live in the umbrella `Ominty` repository.
+A Void Linux port is planned (see the `Ominty-install` project).

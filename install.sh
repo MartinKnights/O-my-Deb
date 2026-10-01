@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# O-my-Deb — one-command installer for Debian 13 / LMDE 7
+# Ominty — one-command installer for Debian 13 / LMDE 7
 #
 # Installs: Niri (prebuilt .deb) + xwayland-satellite, Quickshell (Debian
 # trixie-backports), DMS + matugen + ghostty (AvengeMedia Open Build Service),
-# pipewire, the omivoid CLI + actions + adapters, DMS plugins, and deploys
-# the O-my-Deb configurations.
+# pipewire, the ominty CLI + actions + adapters, DMS plugins, and deploys
+# the Ominty configurations.
 #
 # Usage:
 #   ./install.sh                              # full install
@@ -14,7 +14,7 @@
 #   ./install.sh --help
 #
 # Idempotent: safe to re-run. Existing configuration is backed up
-# (suffix .bak-omivoid-<timestamp>) before being replaced.
+# (suffix .bak-ominty-<timestamp>) before being replaced.
 #
 set -euo pipefail
 
@@ -31,7 +31,7 @@ INSTALL_PLUGINS=1
 # libseat1 is listed explicitly because packages/niri_*.deb declares only
 # `alacritty, fuzzel` as dependencies. Without libseat1, niri installs but dies
 # at runtime with "error while loading shared libraries: libseat.so.1", which
-# also breaks `omivoid registry build` (it shells out to `niri validate`).
+# also breaks `ominty registry build` (it shells out to `niri validate`).
 APT_PACKAGES=(
   fuzzel
   pipewire pipewire-pulse wireplumber
@@ -61,7 +61,7 @@ DMS_PLUGINS=(dankHooks dankKDEConnect dankLauncherKeys quickCapture wallpaperCar
 
 # --- helpers ---------------------------------------------------------------
 
-say()  { printf '\033[1;34m[O-my-Deb]\033[0m %s\n' "$*"; }
+say()  { printf '\033[1;34m[Ominty]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 
@@ -70,7 +70,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 backup_existing() {  # backup_existing <path>
   local p="$1"
   [ -e "$p" ] || return 0
-  local bak="${p}.bak-omivoid-$(date +%Y%m%d-%H%M%S)"
+  local bak="${p}.bak-ominty-$(date +%Y%m%d-%H%M%S)"
   cp -a "$p" "$bak"
   say "Backed up existing $p -> $bak"
 }
@@ -91,7 +91,7 @@ pin_quickshell() {
   # deprecated for Debian and directs users to Debian's own build (trixie-backports
   # on Debian 13). The OBS version string (0.3.1.db2) sorts higher than Debian's
   # (0.3.0-1~bpo13+1), so without this pin APT would prefer the deprecated build.
-  local pin=/etc/apt/preferences.d/omivoid-quickshell
+  local pin=/etc/apt/preferences.d/ominty-quickshell
   if [ ! -f "$pin" ]; then
     say "Pinning quickshell to the Debian build..."
     printf 'Package: quickshell\nPin: release n=trixie-backports\nPin-Priority: 1001\n' \
@@ -178,7 +178,7 @@ fi
 # --- 4. deploy configurations -----------------------------------------------
 
 say "Deploying configurations..."
-mkdir -p ~/.config/niri ~/.config/DankMaterialShell ~/.config/omivoid ~/.local/bin
+mkdir -p ~/.config/niri ~/.config/DankMaterialShell ~/.config/ominty ~/.local/bin
 
 # niri
 backup_existing ~/.config/niri/config.kdl
@@ -207,36 +207,36 @@ backup_existing ~/.config/DankMaterialShell/plugin_settings.json
 sed "s|__HOME__|$HOME|g" "$REPO_DIR/configs/dms/plugin_settings.json.template" \
   > ~/.config/DankMaterialShell/plugin_settings.json
 
-# omivoid (user configuration wins)
+# ominty (user configuration wins)
 for f in ai.toml apps.toml; do
-  if [ ! -f ~/.config/omivoid/$f ]; then
-    cp "$REPO_DIR/configs/omivoid/$f" ~/.config/omivoid/$f
+  if [ ! -f ~/.config/ominty/$f ]; then
+    cp "$REPO_DIR/configs/ominty/$f" ~/.config/ominty/$f
   else
-    say "~/.config/omivoid/$f exists — keeping user configuration."
+    say "~/.config/ominty/$f exists — keeping user configuration."
   fi
 done
 
-# --- 5. omivoid CLI ---------------------------------------------------------
+# --- 5. ominty CLI ---------------------------------------------------------
 
-say "Setting up the omivoid CLI..."
-if [ ! -d "$REPO_DIR/omivoid-lmde" ]; then
-  die "omivoid-lmde submodule missing. Clone with: git clone --recurse-submodules <url>"
+say "Setting up the ominty CLI..."
+if [ ! -d "$REPO_DIR/ominty-core" ]; then
+  die "ominty-core submodule missing. Clone with: git clone --recurse-submodules <url>"
 fi
-ln -sf "$REPO_DIR/omivoid-lmde/cli/omivoid" ~/.local/bin/omivoid
-ln -sf "$REPO_DIR/omivoid-lmde/cli/omivoid-hook" ~/.local/bin/omivoid-hook
+ln -sf "$REPO_DIR/ominty-core/cli/ominty" ~/.local/bin/ominty
+ln -sf "$REPO_DIR/ominty-core/cli/ominty-hook" ~/.local/bin/ominty-hook
 
 say "Generating the Niri bindings fragment..."
-"$REPO_DIR/omivoid-lmde/cli/omivoid" registry build
+"$REPO_DIR/ominty-core/cli/ominty" registry build
 
 # --- 6. DMS plugins ---------------------------------------------------------
 
 if [ "$INSTALL_PLUGINS" -eq 1 ]; then
   say "Installing DMS plugins..."
   mkdir -p ~/.config/DankMaterialShell/plugins
-  ln -sfn "$REPO_DIR/omivoid-lmde/shell/dms/omivoid-actions" \
-    ~/.config/DankMaterialShell/plugins/omivoidActions
-  ln -sfn "$REPO_DIR/omivoid-lmde/shell/dms/omivoid-keybinds" \
-    ~/.config/DankMaterialShell/plugins/omivoidKeybinds
+  ln -sfn "$REPO_DIR/ominty-core/shell/dms/ominty-actions" \
+    ~/.config/DankMaterialShell/plugins/omintyActions
+  ln -sfn "$REPO_DIR/ominty-core/shell/dms/ominty-keybinds" \
+    ~/.config/DankMaterialShell/plugins/omintyKeybinds
   for p in "${DMS_PLUGINS[@]}"; do
     if [ ! -e ~/.config/DankMaterialShell/plugins/$p ]; then
       dms plugins install "$p" || warn "Could not install plugin: $p"
@@ -247,7 +247,7 @@ fi
 # --- 7. validation ----------------------------------------------------------
 
 say "Validating..."
-"$REPO_DIR/omivoid-lmde/cli/omivoid" registry validate
+"$REPO_DIR/ominty-core/cli/ominty" registry validate
 if have niri; then
   niri validate -c ~/.config/niri/config.kdl \
     || warn "niri validate reported issues (re-check after first login)."

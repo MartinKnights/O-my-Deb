@@ -2,7 +2,7 @@
 
 ## Reference hardware
 
-O-my-Deb was developed and validated on a **Microsoft Surface Book 1** (2016):
+Ominty was developed and validated on a **Microsoft Surface Book 1** (2016):
 
 - Intel Core i7-6600U, 15 GiB RAM
 - Built-in panel `eDP-1` at 2× scale
@@ -63,7 +63,7 @@ It is only present when the base is attached. See
 
 ## Contributing a profile
 
-If you get O-my-Deb working on another device, add a `profiles/<device>/`
+If you get Ominty working on another device, add a `profiles/<device>/`
 directory with:
 
 - `niri-outputs.kdl` — the output configuration
