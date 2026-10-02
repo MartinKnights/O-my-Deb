@@ -25,8 +25,11 @@ on **LMDE 7** (Debian 13, `trixie`). It combines:
 The opinionated defaults deliberately avoid snaps and flatpaks, and prefer
 Nala over raw APT.
 
-**Validated target: LMDE 7 / Debian 13.** Other distributions are reported as
-unsupported by `ominty inspect` and you must not attempt an install without
+**Validated target: LMDE 7 / Debian 13.** Ubuntu-family systems (Ubuntu, and
+Linux Mint built on Ubuntu) are an **experimental** target — `ominty inspect`
+reports them as `support_level: experimental`, and `install.sh` provisions the
+desktop from source (see [docs/UBUNTU.md](docs/UBUNTU.md)). Any other
+distribution is reported as unsupported; do not attempt an install without
 explicit user consent.
 
 ---

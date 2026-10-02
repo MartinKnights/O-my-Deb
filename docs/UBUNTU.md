@@ -1,0 +1,106 @@
+# Ubuntu-family support (experimental)
+
+Ominty is **validated on LMDE 7 / Debian 13** and runs on **Ubuntu-family**
+systems (Ubuntu, and Linux Mint built on Ubuntu) through a **source-build**
+path. This document is the support matrix and the runbook.
+
+> The full migration strategy, including the two-machine process, lives in
+> `Ominty-Migration-Planning.md` (kept with the owner). This file is the
+> repo-side summary.
+
+## Support matrix
+
+| Family | Detection (`ID`/`ID_LIKE`) | Desktop source | Support level |
+| --- | --- | --- | --- |
+| `debian` | `ID=debian` | apt + OBS (Debian 13) | validated |
+| `mint-debian` | `ID=linuxmint`, `ID_LIKE=debian` (LMDE) | apt + OBS (Debian 13) | validated |
+| `ubuntu` | `ID=ubuntu` | source build | experimental |
+| `mint-ubuntu` | `ID=linuxmint`, `ID_LIKE="ubuntu debian"` (Mint 22.x) | source build | experimental |
+| `void` | `ID=void` | — | reserved |
+
+`ominty inspect` reports this as `platform.family` and `platform.support_level`.
+
+## Why Ubuntu needs a source build
+
+| Component | Debian 13 / LMDE 7 | Ubuntu-family |
+| --- | --- | --- |
+| `quickshell` | Debian `trixie-backports` | **built from source** — needs Qt ≥ 6.6 (Ubuntu 24.04 ships 6.4.2) |
+| `dms` | AvengeMedia OBS (`Debian_13`) | **built from source** (Go, embeds the shell) |
+| `matugen` | AvengeMedia OBS | **built from source** (Rust/cargo) |
+| `ghostty` | AvengeMedia OBS | not installed by default (alacritty is) |
+| `niri` | bundled `.deb` | bundled `.deb`, **plus undeclared runtime deps** |
+
+The AvengeMedia Launchpad PPA (`ppa:avengemedia/danklinux`, `…/dms`) is Ubuntu
+25.10 / 26.04+ only — it has no `noble` (24.04) builds — so Mint 22.x cannot use
+it.
+
+### niri `.deb` gaps on Ubuntu
+
+`packages/niri_*.deb` declares only `alacritty, fuzzel` as dependencies, but on
+Ubuntu 24.04 it also needs:
+
+- `libseat1` (apt), and
+- `libdisplay-info.so.2` — Debian soname 2, while Ubuntu 24.04 ships only
+  soname 1. The installer builds **libdisplay-info 0.2.0** and installs it to
+  `/usr/local`.
+
+Without these, `niri` installs but dies at runtime with `libseat.so.1` /
+`libdisplay-info.so.2` not found, which also breaks `ominty registry build`.
+
+## Runbook
+
+`install.sh` detects the family and, for `ubuntu`/`mint-ubuntu`, runs:
+
+```sh
+scripts/ubuntu/ubuntu-deps.sh    # sudo boundary: build deps, niri .debs, libseat1, libdisplay-info 2
+scripts/ubuntu/ubuntu-build.sh   # user space: Qt (aqtinstall) -> Quickshell -> DMS -> matugen
+```
+
+then continues with the shared steps (deploy configs, `ominty` CLI symlinks,
+`registry build`, DMS plugins, `dms.service`, validation).
+
+Apply with the usual dry run first:
+
+```sh
+./install.sh --dry-run --layers "desktop terminal editor cli browser"
+./install.sh --layers "desktop terminal editor cli browser"
+```
+
+The scripts are also runnable on their own and are idempotent. Versions and
+locations are overridable by environment variable:
+
+| Variable | Default |
+| --- | --- |
+| `OMINTY_QT_VERSION` | `6.8.3` |
+| `OMINTY_GO_VERSION` | `1.26.8` |
+| `OMINTY_LIBDISPLAY_VERSION` | `0.2.0` |
+| `OMINTY_PREFIX` | `~/.local` |
+| `OMINTY_BUILD_DIR` | `~/.cache/ominty/build` |
+
+## Known limitations
+
+- The layer manifest in `ominty-core` (`cli/omintylib/inspect.py`) is
+  Debian-centric: source-built `quickshell`/`dms`/`matugen` are not seen by
+  `dpkg`, so `ominty inspect` reports them as missing on Ubuntu-family. Treat
+  the `desktop` layer's package findings on Ubuntu-family as informational
+  until the manifest gains a `build` source.
+- `ominty` still targets the Debian-first layer set; some optional layer
+  packages (e.g. `ghostty`, `firefox-esr`) do not exist on Ubuntu-family and are
+  skipped.
+- The bundled `niri` `.deb` should eventually be built per distro family (or its
+  `Depends` completed) so the `libseat1` / `libdisplay-info` workaround is no
+  longer needed.
+
+## Lessons learned (Ubuntu-based Mint)
+
+- Build the Qt rpath **into** the installed Quickshell
+  (`-DCMAKE_INSTALL_RPATH=<Qt>/lib`), otherwise the installed binary picks up
+  the system Qt 6.4.2 and fails with ABI warnings.
+- Install libdisplay-info by **staging** (`meson install --destdir`) and copying
+  as root; running `meson` itself under `sudo` resolves a different meson and
+  fails to read `install.dat`.
+- `apt-get update` can return non-zero because of an unrelated broken PPA; the
+  dependency script tolerates that.
+- The DMS runtime must acquire `org.freedesktop.Notifications`; the installer
+  writes a user `dms.service` that sets `PATH` to include `~/.local/bin` and
+  `OMINTY_CLI`.

@@ -193,34 +193,77 @@ case " $LAYERS " in
   *) warn "The 'desktop' layer is not selected; this installs tooling without the desktop itself." ;;
 esac
 
-# OS check: Debian 13 (trixie) / LMDE 7 (faye)
+# --- OS family --------------------------------------------------------------
+# detect_platform() in ominty-core collapses the Debian family to "debian"
+# because they share apt/systemd. The installer needs the finer distinction to
+# choose a provisioning path (mirrors ominty-core cli/omintylib/platform.py).
 . /etc/os-release 2>/dev/null || true
-case "${VERSION_CODENAME:-}" in
-  trixie|faye|gigi) : ;;
+detect_family() {
+  local id id_like
+  id="$(printf '%s' "${ID:-}" | tr '[:upper:]' '[:lower:]')"
+  id_like="$(printf '%s' "${ID_LIKE:-}" | tr '[:upper:]' '[:lower:]')"
+  case "$id" in
+    void) echo void ;;
+    linuxmint) case "$id_like" in *ubuntu*) echo mint-ubuntu ;; *) echo mint-debian ;; esac ;;
+    ubuntu) echo ubuntu ;;
+    debian) echo debian ;;
+    *) case "$id_like" in *ubuntu*) echo ubuntu ;; *debian*) echo debian ;; *) echo unknown ;; esac ;;
+  esac
+}
+FAMILY="$(detect_family)"
+say "Detected family: $FAMILY (${PRETTY_NAME:-unknown})"
+
+case "$FAMILY" in
+  debian|mint-debian)
+    case "${VERSION_CODENAME:-}" in
+      trixie|faye|gigi) : ;;
+      *) warn "Untested Debian-family codename '${VERSION_CODENAME:-?}'. Debian 13 / LMDE 7 is the validated target." ;;
+    esac
+    ;;
+  ubuntu|mint-ubuntu)
+    warn "Ubuntu-family target ($FAMILY) — supported via the source-build path (experimental)."
+    ;;
   *)
-    warn "Untested distro (${PRETTY_NAME:-unknown}). Debian 13 / LMDE 7 is the supported target."
+    die "Unsupported distribution (${PRETTY_NAME:-unknown}). Ominty targets Debian-family systems."
     ;;
 esac
 
-# --- 1. apt repositories ----------------------------------------------------
+if [ "$FAMILY" = "ubuntu" ] || [ "$FAMILY" = "mint-ubuntu" ]; then
+  # --- 1-2 (Ubuntu): build the desktop from source --------------------------
+  # Ubuntu-family systems do not package Quickshell/DMS/matugen and ship a Qt
+  # older than Quickshell's floor, so the desktop is built from source. The
+  # scripts own the sudo boundary (deps) and the user-space build respectively.
+  say "Provisioning the Ubuntu-family desktop (source build; see docs/UBUNTU.md)."
+  run bash "$REPO_DIR/scripts/ubuntu/ubuntu-deps.sh"
+  run bash "$REPO_DIR/scripts/ubuntu/ubuntu-build.sh"
 
-ensure_backports
-pin_quickshell
-add_obs_repositories
+  # Best effort: the apt-sourced layer packages that also exist on Ubuntu.
+  # quickshell/dms/matugen/ghostty are built here or unavailable, so excluded.
+  APT_BEST_EFFORT="$(layer_packages apt quickshell)"
+  if [ -n "$APT_BEST_EFFORT" ]; then
+    say "Installing remaining layer packages (best effort)…"
+    # shellcheck disable=SC2086
+    run sudo apt-get install -y $APT_BEST_EFFORT || warn "Some layer packages are unavailable on this family; continuing."
+  fi
+else
+  # --- 1. apt repositories (Debian/LMDE) ------------------------------------
+  ensure_backports
+  pin_quickshell
+  add_obs_repositories
 
-# --- 2. system packages -----------------------------------------------------
+  # --- 2. system packages (Debian/LMDE) -------------------------------------
+  say "Installing layers: $LAYERS"
+  say "Installing system packages (this needs sudo)..."
+  run sudo apt-get update -y
 
-say "Installing layers: $LAYERS"
-say "Installing system packages (this needs sudo)..."
-run sudo apt-get update -y
-
-# quickshell first, pinned to Debian's trixie-backports build rather than the
-# deprecated OBS one (see pin_quickshell).
-run sudo apt-get install -y -t trixie-backports quickshell
-# shellcheck disable=SC2086
-run sudo apt-get install -y $APT_PACKAGES
-# shellcheck disable=SC2086
-[ -z "$OBS_PACKAGES" ] || run sudo apt-get install -y $OBS_PACKAGES
+  # quickshell first, pinned to Debian's trixie-backports build rather than the
+  # deprecated OBS one (see pin_quickshell).
+  run sudo apt-get install -y -t trixie-backports quickshell
+  # shellcheck disable=SC2086
+  run sudo apt-get install -y $APT_PACKAGES
+  # shellcheck disable=SC2086
+  [ -z "$OBS_PACKAGES" ] || run sudo apt-get install -y $OBS_PACKAGES
+fi
 
 # --- 3. Niri + xwayland-satellite -------------------------------------------
 
@@ -292,6 +335,23 @@ if [ "$DRY_RUN" -eq 1 ]; then
   plan "$REPO_DIR/ominty-core/cli/ominty registry build  # writes ~/.config/ominty/generated/niri/bindings.kdl"
 else
   "$REPO_DIR/ominty-core/cli/ominty" registry build
+fi
+
+# --- 5b. DMS user service (source builds) -----------------------------------
+# On Debian the dms package ships its own unit; a source build does not, so we
+# install and enable one for the Ubuntu-family install.
+if [ "$FAMILY" = "ubuntu" ] || [ "$FAMILY" = "mint-ubuntu" ]; then
+  say "Installing the DMS user service..."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    plan "render configs/systemd/dms.service -> ~/.config/systemd/user/dms.service (with __HOME__ replaced)"
+    plan "systemctl --user daemon-reload; systemctl --user enable dms.service"
+  else
+    mkdir -p ~/.config/systemd/user
+    sed "s|__HOME__|$HOME|g" "$REPO_DIR/configs/systemd/dms.service" \
+      > ~/.config/systemd/user/dms.service
+    systemctl --user daemon-reload
+    systemctl --user enable dms.service || warn "Could not enable dms.service"
+  fi
 fi
 
 # --- 6. DMS plugins ---------------------------------------------------------

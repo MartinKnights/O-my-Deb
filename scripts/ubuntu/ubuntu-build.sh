@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+#
+# Ominty — Ubuntu/Mint desktop build (user space, no sudo).
+#
+# Called by install.sh for the `ubuntu` / `mint-ubuntu` family, or run directly:
+#
+#     scripts/ubuntu/ubuntu-build.sh
+#
+# Ubuntu-family systems do not package Quickshell / DMS / matugen, and their
+# Qt is older than Quickshell's floor (>= 6.6). So this builds, in order:
+#
+#   1. Qt (official binaries via aqtinstall)      -> $QT_PREFIX
+#   2. Quickshell (against that Qt)               -> $PREFIX (default ~/.local)
+#   3. DMS core (Go, embeds the shell)            -> $PREFIX/bin/dms
+#   4. matugen (Rust)                             -> $PREFIX/bin/matugen
+#
+# Everything is configurable and idempotent; re-running skips completed steps.
+#
+set -uo pipefail
+
+REPO_DIR="${OMINTY_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+PREFIX="${OMINTY_PREFIX:-$HOME/.local}"
+BUILD_DIR="${OMINTY_BUILD_DIR:-$HOME/.cache/ominty/build}"
+QT_VERSION="${OMINTY_QT_VERSION:-6.8.3}"
+QT_ARCH="linux_gcc_64"
+GO_VERSION="${OMINTY_GO_VERSION:-1.26.8}"
+JOBS="$(nproc 2>/dev/null || echo 4)"
+
+QT_PREFIX="$BUILD_DIR/Qt/$QT_VERSION/gcc_64"
+mkdir -p "$BUILD_DIR" "$PREFIX/bin"
+
+say()  { printf '\033[1;34m[ominty/ubuntu]\033[0m %s\n' "$*"; }
+die()  { printf '\033[1;31m[ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# --- 1. Qt ----------------------------------------------------------------
+if [ -x "$QT_PREFIX/bin/qmake" ]; then
+  say "Qt $QT_VERSION already present at $QT_PREFIX"
+else
+  say "Installing Qt $QT_VERSION via aqtinstall (qtbase/qtdeclarative/qtsvg/qtwayland + shadertools)…"
+  python3 -m venv "$BUILD_DIR/venv" || die "venv creation failed"
+  "$BUILD_DIR/venv/bin/pip" install --quiet --upgrade pip aqtinstall \
+    || die "aqtinstall install failed"
+  "$BUILD_DIR/venv/bin/aqt" install-qt linux desktop "$QT_VERSION" "$QT_ARCH" \
+    -m qtshadertools qtwaylandcompositor --outputdir "$BUILD_DIR/Qt" \
+    || die "Qt install failed"
+fi
+[ -x "$QT_PREFIX/bin/qmake" ] || die "Qt not found at $QT_PREFIX after install"
+
+# --- 2. Quickshell --------------------------------------------------------
+if [ -x "$PREFIX/bin/quickshell" ]; then
+  say "Quickshell already present at $PREFIX/bin/quickshell"
+else
+  say "Building Quickshell against Qt $QT_VERSION…"
+  qs_src="$BUILD_DIR/quickshell"
+  [ -d "$qs_src/.git" ] || git clone --depth 1 \
+    https://github.com/quickshell-mirror/quickshell.git "$qs_src" \
+    || die "quickshell clone failed"
+  (
+    cd "$qs_src" || exit 1
+    cmake -GNinja -B build -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
+      -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+      -DCMAKE_INSTALL_RPATH="$QT_PREFIX/lib" \
+      -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
+      -DVENDOR_CPPTRACE=ON \
+      -DDISTRIBUTOR="Ominty (Ubuntu-family source build)" || exit 1
+    cmake --build build -j "$JOBS" || exit 1
+    cmake --install build || exit 1
+  ) || die "quickshell build failed"
+fi
+
+# --- 3. DMS core ----------------------------------------------------------
+if [ -x "$PREFIX/bin/dms" ]; then
+  say "DMS already present at $PREFIX/bin/dms"
+else
+  say "Building DankMaterialShell core (Go)…"
+  if ! have go; then
+    say "Installing Go $GO_VERSION (user-local)…"
+    curl -fsSL -o "$BUILD_DIR/go.tar.gz" \
+      "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" || die "Go download failed"
+    rm -rf "$BUILD_DIR/go"
+    tar -C "$BUILD_DIR" -xzf "$BUILD_DIR/go.tar.gz" || die "Go extract failed"
+    export PATH="$BUILD_DIR/go/bin:$PATH"
+  fi
+  dms_src="$BUILD_DIR/DankMaterialShell"
+  [ -d "$dms_src/.git" ] || git clone --depth 1 --recurse-submodules \
+    https://github.com/AvengeMedia/DankMaterialShell.git "$dms_src" \
+    || die "DMS clone failed"
+  ( cd "$dms_src" && make -C core build ) || die "DMS build failed"
+  install -m 0755 "$dms_src/core/bin/dms" "$PREFIX/bin/dms" || die "DMS install failed"
+fi
+
+# --- 4. matugen -----------------------------------------------------------
+if [ -x "$PREFIX/bin/matugen" ]; then
+  say "matugen already present at $PREFIX/bin/matugen"
+else
+  say "Building matugen (Rust)…"
+  [ -x "$HOME/.cargo/bin/cargo" ] || {
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$BUILD_DIR/rustup.sh" \
+      || die "rustup download failed"
+    sh "$BUILD_DIR/rustup.sh" -y --no-modify-path || die "rustup install failed"
+  }
+  "$HOME/.cargo/bin/cargo" install matugen || die "matugen build failed"
+  ln -sf "$HOME/.cargo/bin/matugen" "$PREFIX/bin/matugen"
+fi
+
+say "Build complete:"
+for b in quickshell dms matugen; do printf '  %-11s %s\n' "$b" "$(command -v "$b" || echo "$PREFIX/bin/$b")"; done
